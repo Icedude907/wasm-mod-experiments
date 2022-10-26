@@ -1,0 +1,14 @@
+/// Prints a message to the chat
+print-chat: func(msg: string)
+/// Prints a message to the log
+print-log: func(msg: string)
+/// Gets the number of players currently online
+get-player-count: func() -> uuid
+/// Gets a player's data given an id.
+get-player: func(id: u64) -> player
+
+record player {
+  name: string,
+  uuid: uuid,
+}
+type uuid = u64

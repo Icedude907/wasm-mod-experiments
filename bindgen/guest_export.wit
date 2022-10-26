@@ -1,0 +1,5 @@
+modmain: func()
+shutdown: func()
+on-player-join: func() -> uuid
+
+type uuid = u64

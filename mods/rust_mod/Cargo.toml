@@ -1,0 +1,18 @@
+[package]
+name = "wasm_mod_rust"
+version = "0.1.0"
+edition = "2021"
+
+# https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true          # Enable Link Time Optimization. This is a big deal, as it eliminates dead code!
+strip = true        # Strip symbols from binary*. This is a major saving!
+codegen-units = 1   # Reduce number of codegen units to increase optimizations. Improvements are tiny depending on number of files.
+panic = 'abort'     # Abort on panic. Improvements are... I'm not sure.
+# opt-level = 'z'     # (/ 0123 & z) Use this if size matters more than speed. Savings should be minor.
