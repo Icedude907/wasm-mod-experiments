@@ -25,29 +25,29 @@ fn main() {
     let module = Module::new(&store, &module_binary).unwrap();
     // "for initializing the environments passed to host functions after instantiation but before execution."
     // "For example, exported items such as memories and functions which don’t exist prior to instantiation can be accessed here so that host functions can use them."
-    let modenv = modapi::HostEnvForMods::default();
+    let mut modenv = modapi::HostEnvForMods::default();
 
     /* Defining all functions we expose + their handlers.
         Functions can be split between higher level groups ("game", "env") for destinction purposes. Useful with libraries.
         I've also had to define my own calling convention - which I've essentially made a "pseudo function signature" with params:
             `name(arg1_t arg2_t) return_t`
         All values are passed as bits and are up for interpretation by the recipient, nevertheless this signature includes types for reader clarity.
-        Integers (i,u,b) should all be passed and recieved as little endian as the wasm runtime operates on values in this manner.
+        Integers (i,u,b) should all be passed and received as little endian as the wasm runtime operates on values in this manner.
     */
     let import_object = imports!{
         // Functions that can be called to test wasm functionality
         "demo" => {
-            "host_fn()"                 => Function::new_native_with_env(&store, modenv.clone(), modapi::host_fn),
-            "host_fn(u32)"              => Function::new_native(&store, modapi::host_fn_u32),
-            "host_fn() u64"             => Function::new_native(&store, modapi::host_fn__u64),
-            "host_fn(u8 i16 u8) bool8"  => Function::new_native(&store, modapi::host_fn_u8_i16_u8__bool8),
-            "host_fn() (u32, bool8)"    => Function::new_native(&store, modapi::host_fn__u32_bool8),
-            // More complex now - indirect reads & writes
-            "host_fn([u8;12]*)"         => Function::new_native_with_env(&store, modenv.clone(), modapi::host_fn_u8x12p),
-            "host_fn(strutf8)"         => Function::new_native_with_env(&store, modenv.clone(), modapi::host_fn_strutf8),
-            // TODO: TIDY Calling convention
-            "host_fn() [u64;24]*"       => Function::new_native_with_env(&store, modenv.clone(), modapi::host_fn__u64x24p),
-            "host_fn() 100mb*"          => Function::new_native_with_env(&store, modenv.clone(), modapi::host_fn__hostmemtest)
+            "counter()"                 => Function::new_native_with_env(&store, modenv.clone(), modapi::info_fn),
+            "print(u32)"                => Function::new_native(&store, modapi::print_u32),
+            "rand() u64"                => Function::new_native(&store, modapi::rand),
+            "hostmath(u8 i16 u8) bool8" => Function::new_native(&store, modapi::hostmath),
+            "rand() (u32, bool8)"       => Function::new_native(&store, modapi::rand_2),
+            "print(ptr)"                => Function::new_native_with_env(&store, modenv.clone(), modapi::print_buffer),
+            "print(ptr, u32)"           => Function::new_native_with_env(&store, modenv.clone(), modapi::print),
+            "rand(ptr)"                 => Function::new_native_with_env(&store, modenv.clone(), modapi::rand_buffer),
+            "receive_big_buffer(ptr)"   => Function::new_native_with_env(&store, modenv.clone(), modapi::send_big_buffer),
+            // "prepare_arbitrary_string() u32"
+            // "receive_arbitrary(ptr) enum8"
         },
         // Functions to manipulate the state of our "game"
         "game" => {
