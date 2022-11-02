@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 structopt = "0.3.26"
+rand = "0.8.5"
 # Don't want WASI, security hole.
+# NOTE: Wasmer is nearly set to update to 3.0 - must update the code when that happens.
 wasmer = "2.3.0"
 wasmer-compiler-singlepass = "2.3.0"
 #llvm

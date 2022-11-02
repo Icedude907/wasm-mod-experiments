@@ -6,6 +6,8 @@ edition = "2021"
 # https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Freestanding environment, many features are disabled.
+rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
 
 [lib]
 crate-type = ["cdylib"]

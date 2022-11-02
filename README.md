@@ -1,5 +1,8 @@
 # WASM as a mod / scripting system
 
+> I've been thinking lately about how to use Wasmer as a general-purpose embedder for sandboxed scripting (I'm sure I'm not the only one).  
+> &mdash; ElusiveMori (https://github.com/wasmerio/wasmer/issues/315)
+
 Many games & tools today have scripting languages they use for customising their functionality (i.e.: mods).
 
 Essentially:
@@ -55,3 +58,6 @@ The future seems bright for WASM in this use case.
 These tools aren't being used by this project in any capacity, but may prove useful for future developers. _No guarantees_
 - WebAssembly Interface Types: https://github.com/WebAssembly/interface-types/blob/main/proposals/interface-types/Explainer.md
 - `wit-bindgen` turns a platform-agnostic bindings definition into a drop in file to map functions between host and guest (unfinished). Uses the "canonical" ABI.
+
+## Software I used referencing:
+- https://github.com/feather-rs/feather
