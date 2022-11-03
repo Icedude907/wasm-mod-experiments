@@ -1,35 +1,22 @@
 #![allow(non_snake_case)]
-use std::cell::RefCell;
+use std::{cell::RefCell, borrow::BorrowMut};
 
-use wasmer::{WasmerEnv, LazyInit, Memory, WasmPtr, Array, MemoryView, ValueType};
+use rand::Rng;
+use wasmer::{Memory, WasmPtr, MemoryView, ValueType, FunctionEnv, FunctionEnvMut, WasmRef};
 
-/// wasmerenv setup. Allows for interfacing with associated data when a host function is called.
-/// Data can be both user provided (e.g.: a name or uuid or whatnot), or passed by the "vm" (e.g.: memory).
-/// Passed as a reference to *_with_env functions.
-#[derive(WasmerEnv, Clone, Default)]
-pub struct HostEnvForMods {
-    // WasmerEnv requires using a Sync type
-    // NOTE: Functionality currently disabled due to a new environment api in upcoming Wasmer 3.0 (YAY!)
-    // pub data: std::cell::Cell<ModData>,
 
-    /*This will provide a reference to the "memory" section within the module.
-      It doesn't exist until the environment starts (hence LazyInit)
-      We transmute it to a 'Memory' type for convenient operation.
-      https://docs.rs/wasmer/latest/wasmer/trait.WasmerEnv.html
-      Effectively `instance.exports.get_memory("memory").unwrap();`
-    */#[wasmer(export)]
-    pub memory: LazyInit<Memory>,
+/// Passed to functions that want it. Allows the host to easily perform context sensitive actions. Can have multiple (up to a per function basis).
+pub struct ModEnvData {
+    pub memory: Memory, // This is never gonna be used until we have wired in the memory - so no reason to make it an optional.
+    pub counterfn_count: u32,
 }
-// Modifiable instance data relating to the mod.
-// #[derive(Clone, Default, Debug)]
-// pub struct ModData{
-//     pub counterfn_count: u64, // Arbitrary. Use however you need
-// }
+type ModEnvMut<'a, 'b> = FunctionEnvMut<'a, ModEnvData>; // Convenient alias
 
 /// Prints a line to the console. Some info is included
-pub fn info_fn(env: &HostEnvForMods){
-    let mem = env.memory_ref().unwrap();
-    println!("[host]: Guest called void fn. Pages: {}, times called: {}", mem.size().0, "TODO:");
+pub fn info_fn(mut fnenv: ModEnvMut){
+    let mut env = fnenv.data();
+    let mem = env.memory.view(&fnenv); // Oddly roundabout but it works?
+    println!("[host]: Guest called void fn. Pages: {}, times called: {}", mem.size().0, env.counterfn_count);
     // env.counterfn_count += 1;
 }
 /// Prints the passed in number to the console. NOTE: Input will be little endian as per WASM spec
@@ -67,37 +54,32 @@ pub fn rand_2() -> (u32, u8){
     return ret;
 }
 
-#[derive(Copy, Clone)]
-pub struct Arr<T, const N: usize>(pub [T; N]);
-// No guarantee the other side will send a valid combination of values, hence its unsafe
-unsafe impl<T: Copy, const N: usize> ValueType for Arr<T, N>{}
-
 /// Prints a 12 byte byte buffer. Referenced via a pointer - requires access to memory
-pub fn print_buffer(env: &HostEnvForMods, ptr: WasmPtr<Arr<u8,12>>){
-    /* The WasmPtr system is very annoying. I was expecting to be able to put any kind of data type inside and have it work fine (its a pointer - it can be transmuted), but NOPE!
-       Instead either have to do WasmPtr<u8, Array> for arrays like [u8;12] (which has annoying api issues) or implement ValueType like I've done.
-       This is quite poor - instead I have to define a wrapper type.
-       Not a wasm problem - a wasmer problem.
-    */
+pub fn print_buffer(fnenv: ModEnvMut, ptr: WasmPtr<[u8;12]>){
+    let env = fnenv.data();
+    let mem = env.memory.view(&fnenv);
 
-    // This converts to a real pointer - can fail if wasm gives a pointer which is/falls out of bounds
-    let deref = ptr.deref(unsafe{env.memory_ref_unchecked()})
-        .expect("The pointer given hits the end of memory!");
-    // Annoying you can't modify the value in place using the api, you have to copy-edit-write.
-    // TBH no idea why - they allow this behaviour with strings even tho it poses a synchronisation problem. FIXPLS
-    let deref = deref.get().0;
+    // This copies the data
+    let data = ptr.read(&mem).expect("pointer in bounds");
     // let deref = unsafe{ deref.get_mut() };
-    println!("[host]: Host received 12 chars of data from wasm address 0x{:X}: {:?}", ptr.offset(), deref);
+    println!("[host]: Host received 12 chars of data from wasm address 0x{:X}: {:?}", ptr.offset(), data);
 }
 
+// TODO:
+// #[repr(C)]
+// struct wasmstr{
+//     ptr: Wasm
+// }
 
 /// Prints an arbirarily long string (or generic piece of data).
 // Make sure you aren't introducting a buffer overrun exploit somehow - this will depend on your unique scenario
-pub fn print(env: &HostEnvForMods, ptr: WasmPtr<u8, Array>, len: u32){
+pub fn print(fnenv: ModEnvMut, ptr: WasmPtr<u8>, len: u32){
+    let env = fnenv.data();
+    let mem = env.memory.view(&fnenv);
     // This fun function does my job for me in this specific case - also verifies len is in bounds. How convenient.
     // Unsafe for the reason that it can be edited in the wasm environment (ref not copy)
-    let deref = unsafe{ptr.get_utf8_str(env.memory_ref_unchecked(), len)};
-    println!("[mod]: {}", deref.unwrap_or("I was going to say something - but the string I passed was invalid."));
+    let deref = ptr.read_utf8_string(&mem, len);
+    println!("[mod]: {}", deref.unwrap_or("I was going to say something - but the string I passed was invalid.".to_string()));
     /* NOTE: To check bounds do something like:
         let end = ptr.offset.checked_add(str_len)?;
         if end as usize > memory.size().bytes().0 {
@@ -106,39 +88,52 @@ pub fn print(env: &HostEnvForMods, ptr: WasmPtr<u8, Array>, len: u32){
     */
 }
 
-/// As far as I know, the only practical way to insert bulk data into WASM is:
-/// 1) Take in a pointer to a buffer, and fill out the data in there.
-/// Ideally there'd also be a 2nd way where you map host memory into the VM - but since wasm memory is linear this isn't a thing - yet.
-pub fn rand_buffer(env: &HostEnvForMods, outbuf: WasmPtr<Arr<u64, 24>>){
-    let mem = unsafe{outbuf.deref(env.memory_ref_unchecked())}.expect("Pointer provided was invalid");
-    let mem = unsafe{ mem.get_mut() }; // TODO: Verify bounds FIXME
-    for i in 0..24{
-        mem.0[i] = rand::random::<u64>();
-    }
+/// Operates by creating a buffer with data, and copying it into WASM.
+pub fn rand_buffer(fnenv: ModEnvMut, outbuf: WasmPtr<[u64;24]>){
+    let env = fnenv.data();
+    let mem = env.memory.view(&fnenv);
+
+    let data: [u64;24] = rand::random();
+    // The function will fail before writing if part/all of the data is to be placed out of bounds.
+    // Either explode as here or use inspect_err or something.
+    outbuf.deref(&mem).write(data).expect("pointer flows out of bounds.");
 }
 
-/// This function aims to demonstrate method 2.
-/// See [`host_fn__u64x24p`] for details
-pub fn send_big_buffer(env: &HostEnvForMods, outbuf: WasmPtr<Arr<u8, 104857600>>) /*-> WasmPtr<u32>*/{
-    println!("[host]: Long function called. Prepare to wait 10s+");
+/// As far as I know, the only practical way to insert bulk data into WASM is:
+/// Take in a pointer to a buffer, and fill out the data in there.
+/// Ideally there'd also be a 2nd way where you map host memory into the VM - but since wasm memory is linear this isn't a thing - yet.
+pub fn send_big_buffer(fnenv: ModEnvMut, outbuf: WasmPtr<[u8;104857600]>){
+    let mem = fnenv.data().memory.view(&fnenv);
+
+    println!("[host]: Long function called. Prepare to wait a bit generating random numbers");
     let start = std::time::Instant::now();
 
+    // This code is scuffed because we can't easily directly allocate uninitialised data on the heap. (It is crazy to me how this somehow hasn't happened yet in rust)
+    // We will soon - see nightly
     let mut data: Vec<u8> = Vec::with_capacity(104857600); // Rand optimisation. Could have used u8 but thats probs slower
     unsafe{ data.set_len(data.capacity()) };
-    let mut data = data.into_boxed_slice();
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), data.as_mut());
 
     println!("[host]: Generating ~100mb of u64 rand took {}s.", start.elapsed().as_millis() as f64 / 1000.0);
     let start = std::time::Instant::now();
 
-    let mem = unsafe{outbuf.deref(env.memory_ref_unchecked())}.expect("Pointer provided was invalid"); // Location where data goes
-    let mem = unsafe{ mem.get_mut() };
-
-    mem.0.copy_from_slice(&data[..]);
+    // TODO: Check bounds before writing.
+    let outbuf: WasmPtr<u8> = unsafe{ std::mem::transmute(outbuf) };
+    outbuf.slice(&mem, 104857600).unwrap().write_slice(&data[..]).expect("pointer flows out of bounds");
+    // let mut dest = outbuf.deref(&mem).as_mut_ptr();
+    // dest.copy_from_slice(&data[..]);
 
     println!("[host]: Sending over ~100mb took {}s.", start.elapsed().as_millis() as f64 / 1000.0);
 }
 
+// trait Test<T>{
+//     fn getTheThing() -> *const T;
+// }
+// impl<'a, T: ValueType> Test<T> for WasmRef<'a, T> {
+//     fn getTheThing(self) -> *const T {
+//         let base = self.buffer.base;
+//     }
+// }
 
 /*============================================*\
 |   NOW APPROACHING THE DUMPING GROUND         |
