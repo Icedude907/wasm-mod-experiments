@@ -1,0 +1,3 @@
+clang++ --target=wasm32-unknown-unknown -O3 -nostdlib -Wl,--no-entry -o cpp-mod.wasm main.cpp -v
+
+Requires wasm-ld (lld)
