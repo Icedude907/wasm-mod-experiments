@@ -54,23 +54,27 @@ pub unsafe extern "C" fn modmain(){
     // https://github.com/WebAssembly/design/issues/1397
     */
 
+    demo::counter();
     // Allocating a range of unknown size. (2-4mb)
+    #[allow(non_upper_case_globals)]
     const megabyte: u32 = 1024*1024;
     {
-        let elements = (rng.gen_range(2*megabyte..4*megabyte)) as usize;
+        let elements = (2*megabyte) as usize;
         let mut vector: Vec<u64> = vec![2; elements];
-        demo::counter();
-    }
-    // Allocating 3mb, may fit in the other or alloc more
-    {
-        let elements = (1<<20)*3; // 16*3 = 48 pages
-        let mut vector: Vec<u8> = vec![2; elements];
         demo::counter();
     }
 
     // Recieving lots of data
     let somedata = demo::receive_big_buffer();
     demo::print(format!("Somedata: {} {} {} {}", somedata[5], somedata[31], somedata[99], somedata[420]).as_str());
+
+    demo::print("I'm listening. Press q to exit");
+    loop{
+        let string = demo::receive_string();
+        if(string.to_lowercase().contains("quit")){ break; }
+        demo::print(format!("Fantastic! I got your message of: {}", string).as_str());
+    }
+    demo::print("Ah gottem ggs");
 
 
 }

@@ -1,23 +1,25 @@
 #![allow(non_snake_case)]
-use std::{cell::RefCell, borrow::BorrowMut};
+use std::{cell::RefCell, borrow::BorrowMut, io::Write};
 
 use rand::Rng;
 use wasmer::{Memory, WasmPtr, MemoryView, ValueType, FunctionEnv, FunctionEnvMut, WasmRef};
 
 
 /// Passed to functions that want it. Allows the host to easily perform context sensitive actions. Can have multiple (up to a per function basis).
-pub struct ModEnvData {
+pub struct ModEnvData{
     pub memory: Memory, // This is never gonna be used until we have wired in the memory - so no reason to make it an optional.
     pub counterfn_count: u32,
+    pub queued_arbitrary: Option<Vec<u8>>, // Rust doesn't have a *void. TODO: Queued per thread?
 }
-type ModEnvMut<'a, 'b> = FunctionEnvMut<'a, ModEnvData>; // Convenient alias
+type ModEnvMut<'a> = FunctionEnvMut<'a, ModEnvData>; // Convenient alias
 
 /// Prints a line to the console. Some info is included
 pub fn info_fn(mut fnenv: ModEnvMut){
-    let mut env = fnenv.data();
-    let mem = env.memory.view(&fnenv); // Oddly roundabout but it works?
-    println!("[host]: Guest called void fn. Pages: {}, times called: {}", mem.size().0, env.counterfn_count);
-    // env.counterfn_count += 1;
+    let mem = fnenv.data().memory.view(&fnenv); // Oddly roundabout but it works?
+    let memsize = mem.size().0;
+    let mut env = fnenv.data_mut();
+    println!("[host]: Guest called void fn. Pages: {}, times called: {}", memsize, env.counterfn_count);
+    env.counterfn_count += 1;
 }
 /// Prints the passed in number to the console. NOTE: Input will be little endian as per WASM spec
 pub fn print_u32(num: u32){
@@ -65,15 +67,10 @@ pub fn print_buffer(fnenv: ModEnvMut, ptr: WasmPtr<[u8;12]>){
     println!("[host]: Host received 12 chars of data from wasm address 0x{:X}: {:?}", ptr.offset(), data);
 }
 
-// TODO:
-// #[repr(C)]
-// struct wasmstr{
-//     ptr: Wasm
-// }
-
 /// Prints an arbirarily long string (or generic piece of data).
 // Make sure you aren't introducting a buffer overrun exploit somehow - this will depend on your unique scenario
 pub fn print(fnenv: ModEnvMut, ptr: WasmPtr<u8>, len: u32){
+    //                         ^ Had to unwrap struct ^ due to wasmer api limitation
     let env = fnenv.data();
     let mem = env.memory.view(&fnenv);
     // This fun function does my job for me in this specific case - also verifies len is in bounds. How convenient.
@@ -117,13 +114,54 @@ pub fn send_big_buffer(fnenv: ModEnvMut, outbuf: WasmPtr<[u8;104857600]>){
     println!("[host]: Generating ~100mb of u64 rand took {}s.", start.elapsed().as_millis() as f64 / 1000.0);
     let start = std::time::Instant::now();
 
-    // TODO: Check bounds before writing.
+    // NOTE: THIS METHOD IS MUCH SLOWER THAN IT USED TO BE, THANKS TO WASM 3.0.0's API SHORTCOMINGS.
     let outbuf: WasmPtr<u8> = unsafe{ std::mem::transmute(outbuf) };
-    outbuf.slice(&mem, 104857600).unwrap().write_slice(&data[..]).expect("pointer flows out of bounds");
+    outbuf.slice(&mem, 104857600).expect("pointer flows out of bounds").write_slice(&data[..]).unwrap();
     // let mut dest = outbuf.deref(&mem).as_mut_ptr();
     // dest.copy_from_slice(&data[..]);
 
     println!("[host]: Sending over ~100mb took {}s.", start.elapsed().as_millis() as f64 / 1000.0);
+}
+
+/// Generic fn to send queued data
+pub fn send_arbitrary(mut fnenv: ModEnvMut, outbuf: WasmPtr<u8>) -> u8{
+    let env = fnenv.data();
+    let mem = env.memory.view(&fnenv);
+    let ret = match &env.queued_arbitrary {
+        None => SendArbitraryResult::NotPrepared,
+        Some(buf) => {
+            let outbuf = outbuf.slice(&mem, buf.len() as u32);
+            match outbuf {
+                Err(_) => SendArbitraryResult::GenericFailure,
+                Ok(outbuf) => {
+                    outbuf.write_slice(&buf[..]).unwrap();
+                    SendArbitraryResult::Sucess
+                }, // Shouldn't concieveably fail - prev slic function ran the checks.
+            }
+        }
+    };
+    let env = fnenv.data_mut();
+    env.queued_arbitrary = None;
+    return ret as u8;
+}
+#[repr(u8)]
+enum SendArbitraryResult{
+    Sucess = 0,
+    GenericFailure = 1,
+    NotPrepared = 2,
+}
+
+pub fn prepare_arbitrary_string(mut fnenv: ModEnvMut) -> u32 { // TODO: Set to wasm usize
+    // Data gathering
+    print!("[host]: Hi the mod wants a string. pls type something ty:\n> "); let _ = std::io::stdout().flush();
+    let mut buf = String::new();
+    std::io::stdin().read_line(&mut buf).unwrap();
+    if buf.ends_with('\n'){ buf.pop(); }
+
+    // Setup
+    let len = buf.len();
+    fnenv.data_mut().queued_arbitrary = Some(buf.into_bytes());
+    return len as u32;
 }
 
 // trait Test<T>{

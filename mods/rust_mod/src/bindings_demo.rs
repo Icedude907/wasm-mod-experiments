@@ -30,8 +30,7 @@ pub mod demo{
     }
     pub fn print(string: &str){
         // Convert slice to FFI-compatible struct
-        let s = super::externs::slice(string.as_ptr(), string.len());
-        unsafe{ super::externs::print(s) }
+        unsafe{ super::externs::print(string.as_bytes().into()) }
     }
     pub fn rand_buffer() -> [u64;24]{
         // This function is sneaky and unwraps the buffer.
@@ -47,6 +46,19 @@ pub mod demo{
             let mut buf = Box::<[u8;104857600]>::new([0;104857600]); // Should use new_uninit (nightly)
             super::externs::receive_big_buffer(buf.as_mut());
             return buf;
+        }
+    }
+
+    /// Note: String is unchecked. TODO: Error propagation
+    pub fn receive_string() -> String{
+        unsafe{
+            let len = super::externs::prepare_arbitrary_string();
+            let mut dat: Vec<u8> = Vec::with_capacity(len);
+            dat.set_len(len);
+            let result = super::externs::receive_arbitrary(dat.as_mut_ptr());
+            if(result != super::externs::ReceiveArbitraryResult::Sucess){ panic!("Problem with data received."); }
+
+            return String::from_utf8_unchecked(dat);
         }
     }
 }
@@ -77,16 +89,33 @@ mod externs{
         pub fn print_buffer(buf: &[u8; 12]);
 
         #[cfg_attr(target_arch = "wasm32", link_name = "print(ptr, u32)")]
-        pub fn print(string: slice<u8>);
+        pub fn print(string: FFISlice<u8>);
 
         #[cfg_attr(target_arch = "wasm32", link_name = "rand(ptr)")]
         pub fn rand_buffer(outbuf: &mut [u64;24]);
 
         #[cfg_attr(target_arch = "wasm32", link_name = "receive_big_buffer(ptr)")]
-        pub fn receive_big_buffer(outbuf: &mut [u8;104857600]); // Some read only memory
+        pub fn receive_big_buffer(outbuf: &mut [u8;104857600]);
+
+        #[cfg_attr(target_arch = "wasm32", link_name = "receive_arbitrary(ptr) enum8")]
+        pub fn receive_arbitrary(outbuf: *mut u8) -> ReceiveArbitraryResult;
+        #[cfg_attr(target_arch = "wasm32", link_name = "prepare_arbitrary_string() usize")]
+        pub fn prepare_arbitrary_string() -> usize;
     }
     #[repr(C)] pub struct a(pub u32, pub u8);
-    #[repr(C)] pub struct slice<T>(pub *const T, pub usize);
+    #[repr(C)] pub struct FFISlice<T>(pub *const T, pub usize);
+    impl<T> From<&[T]> for FFISlice<T>{
+        fn from(item: &[T]) -> Self {
+            FFISlice(item.as_ptr(), item.len())
+        }
+    }
+    #[repr(u8)] #[allow(dead_code)] // Odd. This isn't dead but Rust doesnt know.
+    #[derive(PartialEq)]
+    pub enum ReceiveArbitraryResult{
+        Sucess = 0,
+        GenericFailure = 1,
+        NotPrepared = 2,
+    }
 }
 
 // trait Exports{

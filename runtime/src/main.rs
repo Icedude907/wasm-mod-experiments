@@ -26,8 +26,9 @@ fn main() {
 
     // Wraps arbitrary data (modapi::ModEnv) we want to pass to functions called by wasm. Data is owned by the store.
     let fnenv = FunctionEnv::new(&mut store, modapi::ModEnvData{
-        memory: unsafe{ std::mem::MaybeUninit::zeroed().assume_init() },
+        memory: unsafe{ #[allow(invalid_value)] std::mem::MaybeUninit::zeroed().assume_init() },
         counterfn_count: 0,
+        queued_arbitrary: None,
     });
 
     /* Defining all functions we expose + their handlers.
@@ -47,8 +48,8 @@ fn main() {
             "print(ptr, u32)"           => Function::new_typed_with_env(&mut store, &fnenv, modapi::print),
             "rand(ptr)"                 => Function::new_typed_with_env(&mut store, &fnenv, modapi::rand_buffer),
             "receive_big_buffer(ptr)"   => Function::new_typed_with_env(&mut store, &fnenv, modapi::send_big_buffer),
-            // "prepare_arbitrary_string() u32"
-            // "receive_arbitrary(ptr) enum8"
+            "receive_arbitrary(ptr) enum8"      => Function::new_typed_with_env(&mut store, &fnenv, modapi::send_arbitrary),
+            "prepare_arbitrary_string() usize"  => Function::new_typed_with_env(&mut store, &fnenv, modapi::prepare_arbitrary_string),
         },
         // Functions to manipulate the state of our "game"
         "game" => {
