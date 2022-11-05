@@ -1,0 +1,6 @@
+clang++ -std=c++17 --target=wasm32-unknown-unknown -mmultivalue -nostdlib -Wl,--no-entry -I"./util/" -O3 -o cpp-mod.wasm main.cpp
+
+Requires wasm-ld (lld)
+TODO: Become freestanding, provide libs to link with
+As it stands I'm not sure the C++ development environment actually has the tools to do this.
+CPP mod is on hold for a while

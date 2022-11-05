@@ -1,6 +1,14 @@
-// #include <stdint.h>
+#include <util/int.h>
 
-// Ok these bindings are definitely for C. No C++ autocasting or namespacing nice things here.
-void modmain(){
+#include "./bindings/demo.h"
 
+[[clang::export_name("modmain")]] void modmain(){
+    demo::counter();
+    demo::print(5);
+    demo::counter();
+    auto res = demo::hostmath(5, 21, 3);
+    auto rng = demo::rand();
+    demo::print(rng);
+    demo::print(res);
+    demo::counter();
 }
