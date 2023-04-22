@@ -1,0 +1,19 @@
+{
+  "targets": {
+    "release": {
+      "outFile": "build/release.wasm",
+      "textFile": "build/release.wat",
+      "sourceMap": true,
+      "optimizeLevel": 3,
+      "shrinkLevel": 0,
+      "converge": false,
+      "noAssert": false
+    }
+  },
+  "entries": ["./bindings/bind.ts"],
+  "options": {
+    "use": [
+      "abort=bindings/bind/abort"
+    ]
+  }
+}

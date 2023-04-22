@@ -1,9 +1,10 @@
-Exposed api:
+## Runtime Exposed Functions:
+(By function name, not parameter layout)
 
 NOTE: The binding's api for individual languages may change these signatures to be more idiomatic.
 This document's primary concern is passing data across the WASM / language boundary.
 
-### `demo`
+### Namespace `demo`
 - `counter()                ` => Prints some text. Keeps track of calling count.
 - `print(u32)               ` => Prints a u32,
 - `rand() u64               ` => Returns a random u64. Use for seeding, etc.
@@ -18,3 +19,9 @@ This document's primary concern is passing data across the WASM / language bound
     + Expected to follow a `prepare_` function. After calling this function (regardless of result), the host drops the data. Subsequent calls will return `NOT_PREPARED` until another `prepare_` function is called.
     + `enum result{ SUCCESS = 0, GENERIC_FAIL = 1, NOT_PREPARED = 2}`
     + Many bindings will offer a utility function to bundle arbitrary length data behaviour.
+    + This function is used for all arbitrary-length data transferal functions (only prepare_arbitrary_string atm)
+
+## Mod Exposed Functions
+(No namespace)
+- `modmain` => Called on mod initialisation.
+- `onshutdown` => Optional. Called just before a mod should exit.

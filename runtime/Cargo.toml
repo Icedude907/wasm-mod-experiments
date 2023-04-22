@@ -9,6 +9,10 @@ edition = "2021"
 structopt = "0.3.26"
 rand = "0.8.5"
 # This example will not use WASI - too much freedom for my tastes. Poses potential security holes and massively bulks the code
-wasmer = "3.0.0-rc.2"
-wasmer-compiler-singlepass = "3.0.0-rc.2"
-#llvm
+wasmer = "3.1.1"
+wasmer-compiler-singlepass = "3.1.1" # consider using LLVM for release
+
+[profile.dev.package."*"]
+opt-level = 3
+[profile.dev.package.wasmer]
+opt-level = 0

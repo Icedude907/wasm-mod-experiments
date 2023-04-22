@@ -1,7 +1,7 @@
 #![allow(unused_parens)]
 
-pub mod bindings_demo;
-use crate::bindings_demo::*;
+mod bindings;
+use crate::bindings::*;
 
 use rand::{SeedableRng, Rng};
 

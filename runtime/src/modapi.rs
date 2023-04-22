@@ -156,7 +156,7 @@ pub fn prepare_arbitrary_string(mut fnenv: ModEnvMut) -> u32 { // TODO: Set to w
     print!("[host]: Hi the mod wants a string. pls type something ty:\n> "); let _ = std::io::stdout().flush();
     let mut buf = String::new();
     std::io::stdin().read_line(&mut buf).unwrap();
-    if buf.ends_with('\n'){ buf.pop(); }
+    buf.truncate(buf.trim_end().len());
 
     // Setup
     let len = buf.len();
