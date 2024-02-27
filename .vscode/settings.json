@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "${workspaceFolder}/mods/cpp_mod",
+    // "cmake.sourceDirectory": "${workspaceFolder}/mods/cpp_mod",
 
     // For as_mod
     "errorLens.excludeBySource": [

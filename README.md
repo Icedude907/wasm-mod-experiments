@@ -38,8 +38,7 @@ Check the releases tab for precompiled mods + the runtime (x64 Windows as of rig
     Requires the toolchain `wasm32-unknown-unknown`.
     (If you are completely lost, start [here (rust-lang.org)](https://www.rust-lang.org/learn/get-started)).
     Output is in `./target/wasm32(...)/release/*.wasm`
-- `mods/cpp_mod`: TODO  
-    *(Likely requires `clang` & `cmake` + a build system.)*
+- `mods/cpp_mod`: TODO: In progress
 - `mods/as_mod`: `npm run asbuild`
     Requires node.js, builds `./build/release.wasm`
 
@@ -56,7 +55,9 @@ Rust:
 - Crafting bindings by hand
 
 CPP/Clang:
-- On hold ATM, tough
+- Still incomplete
+- Using some options multi-value is enabled, but the standard library cannot be used freestanding, so much is still tough to implement.
+- Crafting bindings by hand
 
 AssemblyScript:
 - Lacks Multi-Value support disqualifying it from accessing a number of functions (this is being worked on?)

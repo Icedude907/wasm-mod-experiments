@@ -56,7 +56,7 @@ pub fn rand_2() -> (u32, u8){
     return ret;
 }
 
-/// Prints a 12 byte byte buffer. Referenced via a pointer - requires access to memory
+/// Prints a 12 byte byte buffer in decimal. Referenced via a pointer - requires access to memory
 pub fn print_buffer(fnenv: ModEnvMut, ptr: WasmPtr<[u8;12]>){
     let env = fnenv.data();
     let mem = env.memory.view(&fnenv);
