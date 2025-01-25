@@ -1,17 +1,9 @@
-#pragma once
-
-// Compiling with a freestanding wasm std is a ?
-// #include <tuple>
-// in c++26 array will be freestanding.
-// #include <array>
-// #include <cstring>
+#pragma onces
 
 #include <util/int.h>
-#include "util.h"
-
-#define WASMIMPORTFULL(module, name) [[using clang: import_module(module), import_name(name)]]
-#define WASMMODULE "demo"
-#define WASMIMPORT(name) WASMIMPORTFULL(WASMMODULE, name)
+// #include <tuple>
+// #include <array>
+// #include <cstring>
 
 namespace std{
     template<class T, const u64 N> struct array{
@@ -28,10 +20,18 @@ namespace std{
     }
 }
 
+#define WASM_QUOTE_INTERNAL(x) #x
+#define WASM_QUOTE(x) WASM_QUOTE_INTERNAL(x)
+#define WASM_EXPORT(name) [[clang::export_name(WASM_QUOTE(name))]] auto name
+
+#define WASMIMPORTFULL(module, name) [[using clang: import_module(module), import_name(name)]]
+#define WASMMODULE "demo"
+#define WASMIMPORT(name) WASMIMPORTFULL(WASMMODULE, name)
+
 namespace demo{
     // Contains underlying functions across the abi boundary
     namespace externs{
-        WASMIMPORT("counter()") void counter();
+        WASMIMPORT("counter()"                       ) void counter();
         WASMIMPORT("print(u32)"                      ) void print(u32);
         WASMIMPORT("rand() u64"                      ) u64  rand();
         WASMIMPORT("hostmath(u8 i16 u8) bool8"       ) u8   hostmath(u8, i16, u8);

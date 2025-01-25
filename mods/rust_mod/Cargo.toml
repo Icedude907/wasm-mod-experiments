@@ -1,12 +1,10 @@
+# NOTE: For wasm32 freestanding target (see .cargo)
 [package]
 name = "wasm_mod_rust"
 version = "0.1.0"
 edition = "2021"
 
-# https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-# Freestanding environment, many features are disabled.
 rand = { version = "0.8.5", default-features = false, features = ["small_rng"] }
 
 [lib]
@@ -17,4 +15,4 @@ lto = true          # Enable Link Time Optimization. This is a big deal, as it e
 strip = true        # Strip symbols from binary*. This is a major saving!
 codegen-units = 1   # Reduce number of codegen units to increase optimizations. Improvements are tiny depending on number of files.
 panic = 'abort'     # Abort on panic. Improvements are... I'm not sure.
-# opt-level = 'z'     # (/ 0123 & z) Use this if size matters more than speed. Savings should be minor.
+# opt-level = 'z'     # (0123z) Use this if size matters more than speed. Savings should be minor.

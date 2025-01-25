@@ -14,8 +14,8 @@ Essentially:
 WASM presents a unique opportunity for this:
 - It supports this mechanism of function calling and function exposure, like a dynamic library.
 - Its faster than most other non-native code by virtue of being precompiled and operating a small instruction set.
-- It's becoming mainstream. Many languages can already compile to WASM (with some caveats). This is both great for the program developers who can get setup quickly, and good for modder's who can pick a language of their choosing and expect reasonable performance.
-- Almost all bloat is optional. Though it is made for the "web", it certainly doesn't need to run on it. NOTE: However, that some of the more recent proposals may make this more annoying.
+- It's becoming mainstream. Many languages can compile to WASM (with caveats). This is both great for the program developers who can get setup quickly, and good for modder's who can pick a language of their choosing.
+- Almost all bloat is optional. NOTE: However, that some of the more recent proposals may make this more annoying.
 
 The following is a "runtime" (in rust) and a collection of "mods" (many languages) that can run in the runtime's environment.  
 This project may be useful to you as a learning resource, but things are changing quickly, and I expect many systems here to be replaced.  
@@ -36,7 +36,7 @@ Check the releases tab for precompiled mods + the runtime (x64 Windows as of rig
     Takes a while due to building the dependencies
 - `mods/rust_mod/`: `cargo build --release`  
     Requires the toolchain `wasm32-unknown-unknown`.
-    (If you are completely lost, start [here (rust-lang.org)](https://www.rust-lang.org/learn/get-started)).
+    (If you are lost, start [here (rust-lang.org)](https://www.rust-lang.org/learn/get-started)).
     Output is in `./target/wasm32(...)/release/*.wasm`
 - `mods/cpp_mod`: TODO: In progress
 - `mods/as_mod`: `npm run asbuild`
@@ -60,7 +60,7 @@ CPP/Clang:
 - Crafting bindings by hand
 
 AssemblyScript:
-- Lacks Multi-Value support disqualifying it from accessing a number of functions (this is being worked on?)
+- Lacks Multi-Value support disqualifying it from accessing a number of functions. (Nobody seems to be working on this at the moment.)
 - Crafting bindings by hand
 
 In closing, I'd say WebAssembly is **not** ready to do something like this **yet**.  

@@ -106,7 +106,7 @@ mod externs{
     #[repr(C)] pub struct FFISlice<T>(pub *const T, pub u32);
     impl<T> From<&[T]> for FFISlice<T>{
         fn from(item: &[T]) -> Self {
-            FFISlice(item.as_ptr(), item.len())
+            FFISlice(item.as_ptr(), item.len() as u32)
         }
     }
     #[repr(u8)] #[allow(dead_code)] // Odd. This isn't dead but Rust doesnt know.

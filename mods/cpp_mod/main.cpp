@@ -1,6 +1,5 @@
 #include <util/int.h>
-
-#include "./bindings/demo.h"
+#include <bindings/demo.h>
 
 WASM_EXPORT(modmain)() -> void {
     demo::counter();
@@ -17,6 +16,7 @@ WASM_EXPORT(modmain)() -> void {
     auto rng2 = demo::rand2();
     demo::print(rng2.a);
     demo::print(rng2.b);
+
 
     demo::print("HELLO WORLD!");
     auto buf = demo::rand_buf();
