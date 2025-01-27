@@ -10,10 +10,11 @@
       "noAssert": false
     }
   },
-  "entries": ["./bindings/bind.ts"],
+  "entries": ["./bindings/env.ts"],
   "options": {
     "use": [
-      "abort=bindings/bind/abort"
+      "abort=bindings/env/abort",
+      "seed=bindings/env/seed"
     ]
   }
 }

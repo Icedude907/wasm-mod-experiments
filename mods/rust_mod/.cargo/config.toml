@@ -1,5 +1,2 @@
 [build]
 target = "wasm32-unknown-unknown"
-rustflags = "-Ctarget-feature=+multivalue"
-# See https://github.com/llvm/llvm-project/blob/main/clang/test/Preprocessor/wasm-target-features.c
-# `BLEEDING-EDGE-NOT` I think

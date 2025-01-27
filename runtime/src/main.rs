@@ -1,12 +1,11 @@
 #![allow(unused_parens)]
-#![allow(unused_imports)] // TODO: Remove
 
 use std::path::PathBuf;
 
 use structopt::StructOpt;
-use wasmer::{Store, Module, Instance, Function, Value, imports, ExportError::*, Memory, MemoryType, FunctionEnv};
+use wasmer::{Store, Module, Instance, Function, imports, ExportError::*, FunctionEnv};
 
-pub mod modapi;
+pub mod modhandlers;
 
 #[derive(StructOpt, Debug)]
 struct Args{
@@ -25,85 +24,78 @@ fn main() {
     let module = Module::new(&store, &module_binary).unwrap();
 
     // Wraps arbitrary data (modapi::ModEnv) we want to pass to functions called by wasm. Data is owned by the store.
-    let fnenv = FunctionEnv::new(&mut store, modapi::ModEnvData{
-        memory: unsafe{ #[allow(invalid_value)] std::mem::MaybeUninit::zeroed().assume_init() },
-        counterfn_count: 0,
-        queued_arbitrary: None,
-    });
+    let modenv = FunctionEnv::new(&mut store, modhandlers::ModWasmState::new());
 
-    /* Defining all functions we expose + their handlers.
-        Functions can be split between higher level groups ("game", "env") for destinction purposes. Useful with libraries.
-        Integers (i,u,b) should all be passed and received as little endian as the wasm runtime operates on values in this manner.
-        Though fundamentally the data you pass around is random bits, the wasm module has a few "types" (i32 i64 i8x8 etc). This is an odd decision.
+    /* All functions the host exposes.
+        Fundamentally we are passing random bits, but wasm expresses this in "types" (f32, i64, etc).
+        I find this an odd decision (that is, why is memory typed? Surely only operations should be?)
     */
     let imports = imports!{
-        // Functions that can be called to test wasm functionality
-        "demo" => {
-            "counter()"                 => Function::new_typed_with_env(&mut store, &fnenv, modapi::info_fn),
-            "print(u32)"                => Function::new_typed(&mut store, modapi::print_u32),
-            "rand() u64"                => Function::new_typed(&mut store, modapi::rand),
-            "hostmath(u8 i16 u8) bool8" => Function::new_typed(&mut store, modapi::hostmath),
-            "rand() (u32, bool8)"       => Function::new_typed(&mut store, modapi::rand_2),
-            "print(ptr)"                => Function::new_typed_with_env(&mut store, &fnenv, modapi::print_buffer),
-            "print(ptr, u32)"           => Function::new_typed_with_env(&mut store, &fnenv, modapi::print),
-            "rand(ptr)"                 => Function::new_typed_with_env(&mut store, &fnenv, modapi::rand_buffer),
-            "receive_big_buffer(ptr)"   => Function::new_typed_with_env(&mut store, &fnenv, modapi::send_big_buffer),
-            "receive_arbitrary(ptr) enum8"      => Function::new_typed_with_env(&mut store, &fnenv, modapi::send_arbitrary),
-            "prepare_arbitrary_string() usize"  => Function::new_typed_with_env(&mut store, &fnenv, modapi::prepare_arbitrary_string),
-        },
-        // Functions to manipulate the state of our "game"
-        "game" => {
-            // "print_log(str)"            => Function::new_native_with_env(&store, memenv.clone(), modapi::print_log),
-            // "get_player_count: u64"     => Function::new_native(&store, modapi::get_player_count),
-            // "get_player(UUID): Player"  => Function::new_native_with_env(&store, memenv.clone(), modapi::get_player),
-        },
-        // IDK some other function you want.
-        "env" => {
+        "game" => { // Wasm exports are namespaced
+            // Print a hello message (void function test)
+            "hello"     => Function::new_typed(&mut store, modhandlers::hello),
+            // Prints a counter with how many times the function is called (host-state function test)
+            "fncounter"     => Function::new_typed_with_env(&mut store, &modenv, modhandlers::fncounter),
+            // Print the provided number (single argument test)
+            "printnumber"   => Function::new_typed(&mut store, modhandlers::printnumber),
+            // Receive a 64 bit random number (i64 return type)
+            "rand64"    => Function::new_typed_with_env(&mut store, &modenv, modhandlers::rand64),
+            // Receive a 128-bit number (return via a pointer - the multi-value proposal is not supported by any calling convention)
+            "recv128"   => Function::new_typed_with_env(&mut store, &modenv, modhandlers::recv128),
+            // Print the provided string slice (multi-parameter test, pointer+length)
+            "print"     => Function::new_typed_with_env(&mut store, &modenv, modhandlers::print),
+            // Request user input from the console. Blocks until user submits.
+            // Returns an i64-packed tuple. The upper 32 bits contain a success boolean, the lower 32 bits contain the length of data.
+            // Upon returning true, the `bulkrecv` function can be used to write those bytes into a block of memory.
+            // NOTE: Multiple-memories are not supported anywhere, so we must resort to a two-step process to provide the buffer to the target.
+            "getline"   => Function::new_typed_with_env(&mut store, &modenv, modhandlers::getline),
+            // Dumps the enqueued buffer (e.g.: from `getline`) into the specified memory location.
+            // If there was no enqueued buffer, returns u32(false). Returns true if the buffer was written out.
+            // The enqueued buffer is cleared in the host's memory after the call.
+            "bulkdump"  => Function::new_typed_with_env(&mut store, &modenv, modhandlers::bulkdump),
         }
     };
 
     // Preparing to run the module.
-    let instance = Instance::new(&mut store, &module, &imports).unwrap(); // Creates an individual instance / vm for this module.
-    {
-        let mut env_mut = fnenv.as_mut(&mut store);
-        env_mut.memory = instance.exports.get_memory("memory").unwrap().clone(); // Wire up the memory field to the actual module memory. (This is not automated becos of multiple-memories)
-    }
+    let instance = Instance::new(&mut store, &module, &imports).unwrap();
+    // Wire up the memory field to the actual module memory. (This is not automated becos of multiple-memories)
+    modenv.as_mut(&mut store).memory_mod = Some(instance.exports.get_memory("memory").unwrap().clone());
 
     // Diagnostic
-    println!("{:#?}", instance.exports);
+    println!("Wasm module exports: {:#?}", instance.exports);
 
-    /* At this point the WASMer environment is ready
-        Problem: Our functions will never be called because the WASM environment isn't running right now
-        Solution: Search the module for a preagreed upon function to call - which can then run your functions
-        If the function on their end doesn't exist you handle that error (e.g.: Popup "module is invalid, the mod cannot start.")
-            or, if it is non-essential you could run without it. (e.g.: Hooks and callbacks)
-     */ // Inspect_err for in the future.
-    let main_fn = instance.exports.get_function("modmain").unwrap();
-    let optional_onshutdown_fn = instance.exports.get_function("onshutdown");
-    if let Err(e) = &optional_onshutdown_fn{ // Preferred to use inspect_err: still nightly.
-        match e {
-            IncompatibleType => println!("Error: an exit function is defined with incompatible arguments!"),
-            Missing(_) => println!("Note: no exit function is defined in the module.")
-        }
+    // We are ready to run the wasm, but what do we run?
+    // Search for a pre-agreed upon function which we labelled as "modmain()->()".
+    // Else we just scream and die.
+    const NAME_MAIN: &str = "modmain";
+    const NAME_SHUTDOWN: &str = "onshutdown";
+    let main_fn = instance.exports.get_function(NAME_MAIN).unwrap();
+    // Optional callback function
+    let optional_onshutdown_fn = instance.exports.get_function(NAME_SHUTDOWN).inspect_err(|e| match e {
+        IncompatibleType => println!("Error: {} is not a function!", NAME_SHUTDOWN),
+        Missing(_) => println!("Note: {} is not defined.", NAME_SHUTDOWN)
+    }).ok();
+
+    // NOTE: probably DONT DO THIS
+    // If the module is malicious it can do an infinite loop and hang the main thread.
+    // Run it asynchronously or impose a time limit or something.
+    println!("Running \"{}\":", NAME_MAIN);
+    let result = main_fn.call(&mut store, &[]);
+    match result{
+        Ok(_) => {},
+        Err(_) => { println!("Function errored out. Did the mod crash?") }
     }
-    let optional_onshutdown_fn = optional_onshutdown_fn.ok();
 
-    println!("Running \"main\" function.");
-    /* NOTE DONT DO THIS
-       The WASM environment runs on the same thread as the caller
-       If the module was to infinitely loop the program is going to hang
-       Good practice would be on a separate thread with an optional timeout (or something async).
-     */
-    main_fn.call(&mut store, &[]).unwrap();
-
+    // If one function crashes the VM, the other functions can still be used.
+    // (Although this is probably not smart - module memory may be corrupted)
     if let Some(s) = optional_onshutdown_fn {
-        println!("Running shutdown function.");
-        s.call(&mut store, &[]).unwrap();
+        println!("Running {}:", NAME_SHUTDOWN);
+        let _ = s.call(&mut store, &[]); // Non-critical, discard result
     }
 
-    // Done with the demo. Time to print some stats TODO:
+    // Done with the demo. Time to print some stats.
     println!("--------------------\n  Finished.");
-    let mem = fnenv.as_ref(&store).memory.view(&store);
-    println!("Memory used: {} ({} pages)", mem.data_size(), mem.size().0);
+    let mem = modenv.as_ref(&store).memory_mod.as_ref().unwrap().view(&store);
+    println!("Memory used: {}b ({} pages)", mem.data_size(), mem.size().0);
 
 }

@@ -13,9 +13,9 @@ set(CMAKE_CXX_COMPILER_TARGET ${CLANG_TARGET_TRIPLE})
 set(CMAKE_EXECUTABLE_SUFFIX_CXX ".wasm") # IDK why this has to be overridden per-language. It should be global.
 # set(CMAKE_ASM_FLAGS "")
 # set(CMAKE_C_FLAGS "")
-set(CMAKE_CXX_FLAGS "-fno-exceptions -fvisibility=hidden -mmultivalue -mbulk-memory -Xclang -target-abi -Xclang experimental-mv")
-set(CMAKE_EXE_LINKER_FLAGS "-v -nostdlib -nostartfiles -Wl,--no-entry -Wl,--strip-all")
-set(CMAKE_VERBOSE_MAKEFILE on)
+set(CMAKE_CXX_FLAGS "-fno-exceptions -fvisibility=hidden -mbulk-memory")
+set(CMAKE_EXE_LINKER_FLAGS "-nostdlib -nostartfiles -Wl,--no-entry -Wl,--strip-all, -Wl,-z,stack-size=65536") # -v
+# set(CMAKE_VERBOSE_MAKEFILE on)
 
 # Actual CMake stuff
 # --------------------------------
@@ -27,3 +27,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 file(GLOB srcs CONFIGURE_DEPENDS "*.cpp")
 add_executable(cpp_wasm_mod ${srcs})
 target_include_directories(cpp_wasm_mod PRIVATE "./include/")
+target_link_options(cpp_wasm_mod PUBLIC LINKER:-Map=cpp_wasm_mod.map)

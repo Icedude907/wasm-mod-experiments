@@ -1,14 +1,32 @@
-// Intended to be used as wasm32-unknown-unknown module. To compile it, run:
-// tinygo build -size short -o hello-unknown.wasm -target wasm-unknown -gc=leaking -no-debug
 package main
 
-//go:wasmimport demo print(u32)
-func print(x uint32)
+import "fmt"
+
+//---------
+// User code
+// -----------------
 
 //go:export modmain
 func modmain() {
-	print(101)
+	hello()
+	fncounter()
+	fncounter()
+	printnumber(556677)
+	printnumber(99999)
+	var num = rand64();
+	printnumber(uint32(num >> 32))
+	printnumber(uint32(num))
+	var b128 = recv128()
+
+	print(fmt.Sprintf("The 128 bit: 0x%x_%x", b128.high, b128.low))
+	var participant = getline()
+	print(fmt.Sprintf("Thanks for participating, %s", participant))
 }
 
-// Still mandatory: https://github.com/tinygo-org/tinygo/issues/2703
+//go:export onshutdown
+func onshutdown(){
+	print("All the main things seem to be working!")
+}
+
+// Mandatory stub: https://github.com/tinygo-org/tinygo/issues/2703
 func main() {}

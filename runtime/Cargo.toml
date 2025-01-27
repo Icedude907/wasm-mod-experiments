@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 structopt = "0.3.26"
-rand = "0.8.5"
+rand = { version = "0.8.5", features = ["small_rng"] }
 wasmer = "5.0.4"
